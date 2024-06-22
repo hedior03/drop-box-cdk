@@ -27,6 +27,7 @@ export const handler: Handler = async (event) => {
   }
 
   const token = event.queryStringParameters?.token;
+  const filename = event.queryStringParameters?.filename ?? crypto.randomUUID();
 
   if (!token) {
     return {
@@ -44,12 +45,12 @@ export const handler: Handler = async (event) => {
       algorithms: ["HS256"],
     });
 
-    const { organisation, filename } = payload;
+    const { organisation } = payload;
 
     const bucketName = process.env.BUCKET_NAME;
     const objectKey = `${organisation}/${filename}`;
 
-    const signedUrl = s3.getSignedUrl("putObject", {
+    const signedUrl = await s3.getSignedUrlPromise("putObject", {
       Bucket: bucketName,
       Key: objectKey,
       Expires: 3600,

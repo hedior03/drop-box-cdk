@@ -3,11 +3,11 @@ import { RemovalPolicy } from "aws-cdk-lib";
 import { FunctionUrlAuthType, Runtime } from "aws-cdk-lib/aws-lambda";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
-import { Bucket } from "aws-cdk-lib/aws-s3";
 import { Secret } from "aws-cdk-lib/aws-secretsmanager";
 import { Construct } from "constructs";
 import { StringParameter } from "aws-cdk-lib/aws-ssm";
 import path = require("path");
+import { SecretsManager } from "aws-sdk";
 
 export class CdkLambdaStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -19,14 +19,21 @@ export class CdkLambdaStack extends cdk.Stack {
       "JwtSigningKey"
     ).secretValue.unsafeUnwrap();
 
-    const bucketName = StringParameter.valueForStringParameter(
-      this,
-      "/config/uploadBucketName"
-    );
+    const corsRule: cdk.aws_s3.CorsRule = {
+      allowedOrigins: ["*"],
+      allowedMethods: [
+        cdk.aws_s3.HttpMethods.HEAD,
+        cdk.aws_s3.HttpMethods.GET,
+        cdk.aws_s3.HttpMethods.PUT,
+      ],
+      allowedHeaders: ["*"],
+    };
 
-    const bucket = new Bucket(this, "UploadBucket", {
-      bucketName,
+    const bucket = new cdk.aws_s3.Bucket(this, "UploadBucket", {
+      versioned: true,
+      bucketName: "upload-bucket-9nb3tkv3xgc6",
       removalPolicy: RemovalPolicy.DESTROY,
+      cors: [corsRule],
     });
 
     const getSignedUrl = new NodejsFunction(this, "getSignedURL", {
@@ -35,11 +42,12 @@ export class CdkLambdaStack extends cdk.Stack {
       handler: "handler",
       environment: {
         SIGNING_KEY: signingKey,
-        BUCKET_NAME: bucketName,
+        BUCKET_NAME: bucket.bucketName,
       },
     });
 
     bucket.grantReadWrite(getSignedUrl);
+    bucket.grantPut(getSignedUrl);
 
     const logGroupName = `/aws/lambda/upload-file-9nb3tkv3xgc6/${getSignedUrl.functionName}`;
     const logGroup = new LogGroup(this, "LogGroup", {
