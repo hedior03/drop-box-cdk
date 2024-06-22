@@ -4,16 +4,25 @@ import { FunctionUrlAuthType, Runtime } from "aws-cdk-lib/aws-lambda";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
 import { Bucket } from "aws-cdk-lib/aws-s3";
+import { Secret } from "aws-cdk-lib/aws-secretsmanager";
 import { Construct } from "constructs";
+import { StringParameter } from "aws-cdk-lib/aws-ssm";
 import path = require("path");
 
 export class CdkLambdaStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // move to AWS Secrets Manager and Parameter Store
-    const signingKey = "fjf4pw^qek$3*@9p";
-    const bucketName = "upload-bucket-9nb3tkv3xgc6";
+    const signingKey = Secret.fromSecretNameV2(
+      this,
+      "SigningKey",
+      "JwtSigningKey"
+    ).secretValue.unsafeUnwrap();
+
+    const bucketName = StringParameter.valueForStringParameter(
+      this,
+      "/config/uploadBucketName"
+    );
 
     const bucket = new Bucket(this, "UploadBucket", {
       bucketName,
