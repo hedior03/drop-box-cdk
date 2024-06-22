@@ -3,6 +3,7 @@ import { RemovalPolicy } from "aws-cdk-lib";
 import { FunctionUrlAuthType, Runtime } from "aws-cdk-lib/aws-lambda";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
+import { Bucket } from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
 import path = require("path");
 
@@ -14,6 +15,11 @@ export class CdkLambdaStack extends cdk.Stack {
     const signingKey = "fjf4pw^qek$3*@9p";
     const bucketName = "upload-bucket-9nb3tkv3xgc6";
 
+    const bucket = new Bucket(this, "UploadBucket", {
+      bucketName,
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+
     const getSignedUrl = new NodejsFunction(this, "getSignedURL", {
       runtime: Runtime.NODEJS_20_X,
       entry: path.join(__dirname, "../src/get-signed-url.ts"),
@@ -23,6 +29,8 @@ export class CdkLambdaStack extends cdk.Stack {
         BUCKET_NAME: bucketName,
       },
     });
+
+    bucket.grantReadWrite(getSignedUrl);
 
     const logGroupName = `/aws/lambda/upload-file-9nb3tkv3xgc6/${getSignedUrl.functionName}`;
     const logGroup = new LogGroup(this, "LogGroup", {
@@ -38,8 +46,12 @@ export class CdkLambdaStack extends cdk.Stack {
       },
     });
 
-    new cdk.CfnOutput(this, "getSignedUrlEndpoint", {
+    new cdk.CfnOutput(this, "getSignedUrl", {
       value: getSignedUrlEndpoint.url,
+    });
+
+    new cdk.CfnOutput(this, "BucketName", {
+      value: bucket.bucketName,
     });
   }
 }
