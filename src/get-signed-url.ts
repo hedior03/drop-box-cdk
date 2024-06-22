@@ -1,5 +1,8 @@
 import { Handler } from "aws-lambda";
+import { S3 } from "aws-sdk";
 import { jwtVerify } from "jose";
+
+const s3 = new S3();
 
 export const handler: Handler = async (event) => {
   const method = event.requestContext.http.method as string;
@@ -41,12 +44,21 @@ export const handler: Handler = async (event) => {
       algorithms: ["HS256"],
     });
 
-    const { organisation, author } = payload;
+    const { organisation, filename } = payload;
+
+    const bucketName = process.env.BUCKET_NAME;
+    const objectKey = `${organisation}/${filename}`;
+
+    const signedUrl = s3.getSignedUrl("putObject", {
+      Bucket: bucketName,
+      Key: objectKey,
+      Expires: 3600,
+    });
 
     return {
       statusCode: 200,
       body: {
-        payload,
+        signedUrl,
       },
     };
   } catch (error) {
@@ -54,7 +66,7 @@ export const handler: Handler = async (event) => {
       statusCode: 401,
       body: {
         message: "Unauthorized",
-        // error,
+        error,
         // signingKey: process.env.SIGNING_KEY,
         // token,
       },
