@@ -1,6 +1,7 @@
 import { Handler } from "aws-lambda";
+import { jwtVerify } from "jose";
 
-export const handler: Handler = async (event, context) => {
+export const handler: Handler = async (event) => {
   const method = event.requestContext.http.method as string;
   if (method === "OPTIONS") {
     return {
@@ -24,11 +25,39 @@ export const handler: Handler = async (event, context) => {
 
   const token = event.queryStringParameters?.token;
 
-  return {
-    statusCode: 200,
-    body: {
-      signingKey: process.env.SIGNING_KEY,
-      token,
-    },
-  };
+  if (!token) {
+    return {
+      statusCode: 400,
+      body: {
+        message: "Bad Request",
+      },
+    };
+  }
+
+  const encodedSecret = new TextEncoder().encode(process.env.SIGNING_KEY);
+
+  try {
+    const { payload } = await jwtVerify(token, encodedSecret, {
+      algorithms: ["HS256"],
+    });
+
+    const { organisation, author } = payload;
+
+    return {
+      statusCode: 200,
+      body: {
+        payload,
+      },
+    };
+  } catch (error) {
+    return {
+      statusCode: 401,
+      body: {
+        message: "Unauthorized",
+        // error,
+        // signingKey: process.env.SIGNING_KEY,
+        // token,
+      },
+    };
+  }
 };
