@@ -1,33 +1,22 @@
-import { Handler } from "aws-lambda";
+import { APIGatewayProxyEvent, APIGatewayProxyHandler } from "aws-lambda";
+import { SecretsManager } from "aws-sdk";
 import { SignJWT } from "jose";
 
-export const handler: Handler = async (event) => {
-  const method = event.requestContext.http.method as string;
-  if (method === "OPTIONS") {
-    return {
-      statusCode: 200,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST,OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-      },
-    };
-  }
-
-  if (method !== "POST") {
-    return {
-      statusCode: 405,
-      body: {
-        message: "Method Not Allowed",
-      },
-    };
-  }
+export const handler: APIGatewayProxyHandler = async (
+  event: APIGatewayProxyEvent
+) => {
+  const secret = await new SecretsManager()
+    .getSecretValue({
+      SecretId: "SigningKey",
+    })
+    .promise();
+  const signingKey = JSON.parse(secret.SecretString ?? "{}").secretValue;
 
   try {
-    const body = JSON.parse(event.body);
+    const body = JSON.parse(event.body ?? "{}");
 
     const { payload, lifespan } = body;
-    const encodedSecret = new TextEncoder().encode(process.env.SIGNING_KEY);
+    const encodedSecret = new TextEncoder().encode(signingKey);
 
     const token = await new SignJWT(payload!)
       .setIssuedAt(Date.now())
@@ -37,16 +26,16 @@ export const handler: Handler = async (event) => {
 
     return {
       statusCode: 200,
-      body: {
+      body: JSON.stringify({
         token,
-      },
+      }),
     };
   } catch (error) {
     return {
       statusCode: 500,
-      body: {
+      body: JSON.stringify({
         message: "Internal Server Error",
-      },
+      }),
     };
   }
 };

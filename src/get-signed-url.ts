@@ -1,46 +1,34 @@
-import { Handler } from "aws-lambda";
-import { S3 } from "aws-sdk";
+import { APIGatewayProxyEvent, APIGatewayProxyHandler } from "aws-lambda";
+import { S3, SecretsManager } from "aws-sdk";
 import { jwtVerify } from "jose";
 
-const s3 = new S3();
-
-export const handler: Handler = async (event) => {
-  const method = event.requestContext.http.method as string;
-  if (method === "OPTIONS") {
-    return {
-      statusCode: 200,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET,OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-      },
-    };
-  }
-
-  if (method !== "GET") {
-    return {
-      statusCode: 405,
-      body: {
-        message: "Method Not Allowed",
-      },
-    };
-  }
-
-  const token = event.queryStringParameters?.token;
-  const filename = event.queryStringParameters?.filename ?? crypto.randomUUID();
-
-  if (!token) {
-    return {
-      statusCode: 400,
-      body: {
-        message: "Bad Request",
-      },
-    };
-  }
-
-  const encodedSecret = new TextEncoder().encode(process.env.SIGNING_KEY);
-
+export const handler: APIGatewayProxyHandler = async (
+  event: APIGatewayProxyEvent
+) => {
   try {
+    const secret = await new SecretsManager()
+      .getSecretValue({
+        SecretId: "SigningKey",
+      })
+      .promise();
+    const signingKey = JSON.parse(secret.SecretString ?? "{}").secretValue;
+
+    const filename =
+      event.queryStringParameters?.filename ?? crypto.randomUUID();
+
+    const token = event.queryStringParameters?.token;
+
+    if (!token) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          message: "Bad Request",
+        }),
+      };
+    }
+
+    const encodedSecret = new TextEncoder().encode(signingKey);
+
     const { payload } = await jwtVerify(token, encodedSecret, {
       algorithms: ["HS256"],
     });
@@ -50,7 +38,7 @@ export const handler: Handler = async (event) => {
     const bucketName = process.env.BUCKET_NAME;
     const objectKey = `${organisation}/${filename}`;
 
-    const signedUrl = await s3.getSignedUrlPromise("putObject", {
+    const signedUrl = await new S3().getSignedUrlPromise("putObject", {
       Bucket: bucketName,
       Key: objectKey,
       Expires: 3600,
@@ -58,17 +46,18 @@ export const handler: Handler = async (event) => {
 
     return {
       statusCode: 200,
-      body: {
+      body: JSON.stringify({
         signedUrl,
-      },
+        signingKey: process.env.SIGNING_KEY,
+      }),
     };
   } catch (error) {
+    console.error("error", error);
     return {
       statusCode: 401,
-      body: {
+      body: JSON.stringify({
         message: "Unauthorized",
-        error,
-      },
+      }),
     };
   }
 };
