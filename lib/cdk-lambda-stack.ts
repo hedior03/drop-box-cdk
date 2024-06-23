@@ -63,8 +63,32 @@ export class CdkLambdaStack extends cdk.Stack {
       },
     });
 
+    const createSignedLink = new NodejsFunction(
+      this,
+      "createSignedBucketLink",
+      {
+        runtime: Runtime.NODEJS_20_X,
+        entry: path.join(__dirname, "../src/create-signed-link.ts"),
+        handler: "handler",
+        environment: {
+          SIGNING_KEY: signingKey,
+        },
+      }
+    );
+
+    const createSignedLinkEndpoint = createSignedLink.addFunctionUrl({
+      authType: FunctionUrlAuthType.NONE,
+      cors: {
+        allowedOrigins: ["*"],
+      },
+    });
+
     new cdk.CfnOutput(this, "getSignedUrl", {
       value: getSignedUrlEndpoint.url,
+    });
+
+    new cdk.CfnOutput(this, "createSignedLink", {
+      value: createSignedLinkEndpoint.url,
     });
 
     new cdk.CfnOutput(this, "BucketName", {

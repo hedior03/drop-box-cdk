@@ -68,8 +68,6 @@ export const handler: Handler = async (event) => {
       body: {
         message: "Unauthorized",
         error,
-        // signingKey: process.env.SIGNING_KEY,
-        // token,
       },
     };
   }
